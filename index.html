@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8"><title>Cozy Mini Farm</title>
+    <style>
+        body { background: #2e221d; color: #f4ecd8; font-family: monospace; display: flex; flex-direction: column; align-items: center; padding: 20px; user-select: none; }
+        .game { display: flex; gap: 20px; background: #4a3525; padding: 15px; border: 4px solid #705335; border-radius: 6px; }
+        .panel { display: flex; flex-direction: column; gap: 10px; width: 220px; }
+        .grid { display: grid; grid-template-columns: repeat(5, 50px); grid-template-rows: repeat(5, 50px); gap: 4px; background: #44693d; padding: 6px; border: 3px solid #2f482a; }
+        .cell { background: transparent; border: 1px dashed rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; cursor: pointer; position: relative; }
+        .tilled { background: #5a3d28; }
+        .watered { background: #362213; }
+        .badge { position: absolute; bottom: 1px; right: 3px; font-size: 0.6rem; background: rgba(0,0,0,0.6); color: #fff; padding: 1px 3px; border-radius: 2px; }
+        button { background: #875e3b; color: #fff; border: 1px solid #a67953; border-bottom: 3px solid #54371f; padding: 5px; cursor: pointer; font-weight: bold; width: 100%; text-align: left; }
+        button.sel { background: #dca144; color: #000; }
+        button:disabled { background: #444; border: 1px solid #555; color: #888; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h2 style="color:#dca144; margin:0 0 10px 0;">Cozy Farm</h2>
+    <div class="game">
+        <div class="panel">
+            <div style="font-weight:bold; line-height:1.4;">
+                День: <span id="d">1</span> | Золото: <span id="g" style="color:#ffd700">100g</span><br>
+                Энергия: <span id="e" style="color:#4af34a">100</span>/100
+            </div>
+            <button id="tsleep" style="background:#2b4d6e; border-color:#416b94;">💤 Лечь спать</button>
+            <div style="color:#dca144; font-size:0.8rem;">ИНСТРУМЕНТЫ (-2 энегр.)</div>
+            <button id="thoe" class="sel" onclick="setT('hoe')">⛏️ Мотыга</button>
+            <button id="twater" onclick="setT('water')">💧 Лейка</button>
+            <div style="color:#dca144; font-size:0.8rem;">СЕМЕНА / МАГАЗИН</div>
+            <div id="crops"></div>
+        </div>
+        <div class="grid" id="grid"></div>
+    </div>
+<script>
+    const CROPS = {
+        turnip: { n: "Репа", cost: 10, sell: 25, days: 2, s: ["🌱", "🌿", "🧅"] },
+        strawberry: { n: "Клубника", cost: 30, sell: 75, days: 4, s: ["🌱", "🌿", "🌸", "🍓"] },
+        pumpkin: { n: "Тыква", cost: 50, sell: 150, days: 6, s: ["🌱", "🌿", "🍀", "🌼", "🎃"] }
+    };
+    let P = { g: 100, e: 100, d: 1, t: 'hoe', s: {turnip:2, strawberry:0, pumpkin:0}, p: {turnip:0, strawberry:0, pumpkin:0} };
+    let cells = Array(25).fill(null).map(() => ({ tilled: false, watered: false, crop: null, age: 0, ready: false }));
+
+    function setT(t) { P.t = t; render(); }
+    function buy(k) { if(P.g >= CROPS[k].cost) { P.g -= CROPS[k].cost; P.s[k]++; render(); } }
+    function sell(k) { if(P.p[k] > 0) { P.p[k]--; P.g += CROPS[k].sell; render(); } }
+
+    function clickCell(i) {
+        let c = cells[i];
+        if (P.t === 'hoe' && P.e >= 2 && !c.crop) { c.tilled = !c.tilled; P.e -= 2; }
+        else if (P.t === 'water' && P.e >= 2 && c.tilled && !c.watered) { c.watered = true; P.e -= 2; }
+        else if (P.t.startsWith('s_')) {
+            let k = P.t.split('_')[1];
+            if (c.tilled && !c.crop && P.s[k] > 0) { P.s[k]--; c.crop = k; c.age = 0; c.ready = false; if(!P.s[k]) setT('hoe'); }
+        } else if (c.ready) { P.p[c.crop]++; c.crop = null; c.ready = false; }
+        render();
+    }
+
+    document.getElementById('tsleep').onclick = () => {
+        P.d++; P.e = 100;
+        cells.forEach(c => {
+            if (c.crop && c.watered && !c.ready) { c.age++; if(c.age >= CROPS[c.crop].days) c.ready = true; }
+            c.watered = false;
+        });
+        document.body.style.opacity = '0.2'; setTimeout(() => document.body.style.opacity = '1', 200);
+        render();
+    };
+
+    function render() {
+        document.getElementById('d').innerText = P.d;
+        document.getElementById('g').innerText = P.g + 'g';
+        document.getElementById('e').innerText = P.e;
+        document.getElementById('thoe').className = P.t === 'hoe' ? 'sel' : '';
+        document.getElementById('twater').className = P.t === 'water' ? 'sel' : '';
+
+        let html = '';
+        for (let k in CROPS) {
+            let cr = CROPS[k], icon = cr.s[cr.s.length-1];
+            html += `<div style="display:flex; gap:2px; margin-bottom:3px;">
+                <button onclick="buy('${k}')" ${P.g<cr.cost?'disabled':''} style="font-size:0.75rem; padding:3px;">🛒 ${icon} -${cr.cost}g</button>
+                <button onclick="setT('s_${k}')" class="${P.t==='s_'+k?'sel':''}" ${!P.s[k]?'disabled':''} style="font-size:0.75rem; padding:3px;">🌱 Посадить (x${P.s[k]})</button>
+                ${P.p[k] ? `<button onclick="sell('${k}')" style="font-size:0.75rem; padding:3px; background:#4a6f44;">💰 Продать (+${cr.sell}g) x${P.p[k]}</button>` : ''}
+            </div>`;
+        }
+        document.getElementById('crops').innerHTML = html;
+
+        let grid = document.getElementById('grid');
+        grid.innerHTML = '';
+        cells.forEach((c, i) => {
+            let el = document.createElement('div');
+            el.className = `cell ${c.tilled?'tilled':''} ${c.watered?'watered':''}`;
+            el.onclick = () => clickCell(i);
+            if (c.crop) {
+                let cr = CROPS[c.crop], idx = Math.min(Math.floor((c.age/cr.days)*(cr.s.length-1)), cr.s.length-1);
+                el.innerText = cr.s[idx];
+                if (!c.ready) el.innerHTML += `<span class="badge">${cr.days - c.age}</span>`;
+            }
+            grid.appendChild(el);
+        });
+    }
+
+    window.onload = () => { render(); };
+</script>
+</body>
+</html>
